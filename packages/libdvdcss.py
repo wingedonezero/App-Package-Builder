@@ -26,7 +26,6 @@ class LibDvdCss(PackageBase):
         "meson",
         "ninja-build",
         "gcc",
-        "checkinstall",
         "pkg-config",
     ]
 
@@ -45,18 +44,18 @@ cd "$BUILD_DIR"
 # We normalise all tags to dotted form, version-sort them, then map back
 step "Finding latest release tag..."
 
-LATEST_TAG=$(git ls-remote --tags "$REPO_URL" \
-    | grep -v '\^{{}}' \
-    | sed 's|.*refs/tags/||' \
+LATEST_TAG=$(git ls-remote --tags "$REPO_URL" \\
+    | grep -v '\\^{{}}' \\
+    | sed 's|.*refs/tags/||' \\
     | awk '{{
         tag = $0
         norm = tag
         sub(/^v/, "", norm)      # strip leading v
         gsub(/_/, ".", norm)     # underscores to dots
-        print norm "\t" tag      # normalised version TAB original tag
-    }}' \
-    | sort -V -k1,1 \
-    | tail -1 \
+        print norm "\\t" tag      # normalised version TAB original tag
+    }}' \\
+    | sort -V -k1,1 \\
+    | tail -1 \\
     | cut -f2)
 
 if [ -z "$LATEST_TAG" ]; then
@@ -82,34 +81,34 @@ meson setup build --prefix=/usr --buildtype=release
 step "Building..."
 ninja -C build
 
-# ── Package ────────────────────────────────────────────────────────────
-step "Creating .deb with checkinstall..."
+# ── Stage into DESTDIR ─────────────────────────────────────────────────
+# checkinstall doesn't work reliably with meson's Python-based installer,
+# so we stage with DESTDIR ourselves and package with dpkg-deb directly.
+step "Staging install (DESTDIR)..."
+STAGING=$(mktemp -d)
+DESTDIR="$STAGING" ninja -C build install
 
-# checkinstall --install=no: build the .deb, don't install it
-cd build
-sudo checkinstall \\
-    --install=no \\
-    --pkgname="{self.name}" \\
-    --pkgversion="$VERSION" \\
-    --pkgrelease=1 \\
-    --pkglicense="LGPL-2.1" \\
-    --pkggroup="libs" \\
-    --pkgsource="{self.source_url}" \\
-    --pakdir="$BUILD_DIR/libdvdcss/build" \\
-    --nodoc \\
-    --default \\
-    ninja install
+# ── Write DEBIAN/control ───────────────────────────────────────────────
+step "Writing package metadata..."
+ARCH=$(dpkg --print-architecture)
+mkdir -p "$STAGING/DEBIAN"
+cat > "$STAGING/DEBIAN/control" <<CTRL
+Package: {self.name}
+Version: $VERSION
+Architecture: $ARCH
+Maintainer: App-Package-Builder <local>
+Section: libs
+Priority: optional
+Homepage: {self.homepage}
+Description: {self.description}
+CTRL
 
-# ── Move .deb to output dir ────────────────────────────────────────────
-step "Moving .deb to output directory..."
-DEB=$(find "$BUILD_DIR/libdvdcss/build" -maxdepth 1 -name "*.deb" | head -1)
-
-if [ -z "$DEB" ]; then
-    die "No .deb file found after checkinstall!"
-fi
-
-mv "$DEB" "$OUTPUT_DIR/"
-ok "Built: $OUTPUT_DIR/$(basename "$DEB")"
+# ── Build .deb ─────────────────────────────────────────────────────────
+step "Building .deb with dpkg-deb..."
+DEB_FILE="$OUTPUT_DIR/{self.name}_${{VERSION}}_${{ARCH}}.deb"
+dpkg-deb --build "$STAGING" "$DEB_FILE"
+rm -rf "$STAGING"
+ok "Built: $DEB_FILE"
 """ + self._script_footer()
 
         script_path.write_text(script)
