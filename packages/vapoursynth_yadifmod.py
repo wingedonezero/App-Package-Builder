@@ -1,12 +1,14 @@
 """
-vapoursynth-bwdif — Bob Weaver Deinterlacing Filter for VapourSynth.
+vapoursynth-yadifmod — Yadif deinterlacing filter for VapourSynth.
 
-Motion-adaptive deinterlacing ported from FFmpeg's libavfilter.
-Provides core.bwdif.BwDif().
+Motion-adaptive deinterlacing with field-order-aware processing.
+Provides core.yadifmod.Yadifmod().
+
+SIMD via C++ intrinsics (no nasm required).
 
 Requires VapourSynth to be installed first.
 
-Source: https://github.com/HomeOfVapourSynthEvolution/VapourSynth-Bwdif
+Source: https://github.com/HomeOfVapourSynthEvolution/VapourSynth-yadifmod
 """
 
 from __future__ import annotations
@@ -18,26 +20,25 @@ from pathlib import Path
 from core.package_base import PackageBase
 
 
-class VapourSynthBwdif(PackageBase):
-    name = "vapoursynth-bwdif"
-    display_name = "vapoursynth-bwdif"
+class VapourSynthYadifmod(PackageBase):
+    name = "vapoursynth-yadifmod"
+    display_name = "vapoursynth-yadifmod"
     version = "latest"
     version_type = "git_latest"
-    source_url = "https://github.com/HomeOfVapourSynthEvolution/VapourSynth-Bwdif.git"
-    homepage = "https://github.com/HomeOfVapourSynthEvolution/VapourSynth-Bwdif"
-    description = "Bob Weaver Deinterlacing Filter for VapourSynth, ported from FFmpeg"
+    source_url = "https://github.com/HomeOfVapourSynthEvolution/VapourSynth-yadifmod.git"
+    homepage = "https://github.com/HomeOfVapourSynthEvolution/VapourSynth-yadifmod"
+    description = "Yadif motion-adaptive deinterlacing filter for VapourSynth"
 
     apt_build_deps = [
         "git",
         "meson",
         "ninja-build",
-        "gcc",
-        "nasm",
+        "g++",
         "pkg-config",
     ]
 
     def get_effective_version(self) -> str:
-        """Tags use lowercase r-prefix: r1, r2, r3, r4, r4.1, etc."""
+        """Tags use lowercase r-prefix: r1, r2, ..., r10, r10.1, etc."""
         try:
             result = subprocess.run(
                 ["git", "ls-remote", "--tags", self.source_url],
@@ -55,7 +56,7 @@ class VapourSynthBwdif(PackageBase):
                 def _key(t: str) -> tuple:
                     return tuple(int(n) for n in re.findall(r"\d+", t))
                 r_tags.sort(key=_key)
-                return r_tags[-1].lstrip("rR")  # e.g. "r4.1" → "4.1"
+                return r_tags[-1].lstrip("rR")  # e.g. "r10.1" → "10.1"
         except Exception:
             pass
         return "latest"
@@ -71,27 +72,28 @@ REPO_URL="{self.source_url}"
 cd "$BUILD_DIR"
 
 # ── Find latest r-series tag ────────────────────────────────────────────
-# Tags use lowercase r-prefix: r1, r2, r3, r4, r4.1 ...
-step "Finding latest bwdif release tag..."
+# Tags use lowercase r-prefix: r1, r2, ..., r10, r10.1 ...
+step "Finding latest yadifmod release tag..."
 
 LATEST_TAG=$(git ls-remote --tags "$REPO_URL" \\
+    | grep -v '\\^' \\
     | sed 's|.*refs/tags/||' \\
     | grep -iE '^r[0-9]' \\
     | sort -V \\
     | tail -1)
 
 if [ -z "$LATEST_TAG" ]; then
-    die "Could not determine latest bwdif release tag"
+    die "Could not determine latest yadifmod release tag"
 fi
 
 VERSION=$(echo "$LATEST_TAG" | sed 's/^[rR]//')
 ok "Latest tag: $LATEST_TAG  →  version: $VERSION"
 
 # ── Clone ──────────────────────────────────────────────────────────────
-step "Cloning VapourSynth-Bwdif $LATEST_TAG..."
-rm -rf VapourSynth-Bwdif
-git clone --depth 1 --branch "$LATEST_TAG" "$REPO_URL" VapourSynth-Bwdif
-cd VapourSynth-Bwdif
+step "Cloning VapourSynth-yadifmod $LATEST_TAG..."
+rm -rf VapourSynth-yadifmod
+git clone --depth 1 --branch "$LATEST_TAG" "$REPO_URL" VapourSynth-yadifmod
+cd VapourSynth-yadifmod
 
 # ── Build ──────────────────────────────────────────────────────────────
 step "Configuring with meson..."

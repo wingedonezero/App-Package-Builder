@@ -19,8 +19,8 @@ from core.package_base import PackageBase
 class VapourSynthVivtc(PackageBase):
     name = "vapoursynth-vivtc"
     display_name = "vapoursynth-vivtc"
-    version = "latest"
-    version_type = "git_latest"
+    version = "master"
+    version_type = "git_tag"
     source_url = "https://github.com/vapoursynth/vivtc.git"
     homepage = "https://github.com/vapoursynth/vivtc"
     description = "VFM field matcher and VDecimate decimation filter for VapourSynth (IVTC)"
@@ -43,30 +43,15 @@ REPO_URL="{self.source_url}"
 
 cd "$BUILD_DIR"
 
-# ── Find latest tag ────────────────────────────────────────────────────
-step "Finding latest VIVTC release tag..."
-
-LATEST_TAG=$(git ls-remote --tags "$REPO_URL" \\
-    | grep -v '\\^{{}}' \\
-    | sed 's|.*refs/tags/||' \\
-    | awk '{{tag=$0; norm=tag; sub(/^[vRr]/,"",norm); gsub(/_/,".",norm); print norm"\\t"tag}}' \\
-    | sort -V -k1,1 \\
-    | tail -1 \\
-    | cut -f2)
-
-if [ -z "$LATEST_TAG" ]; then
-    die "Could not determine latest VIVTC release tag"
-fi
-
-VERSION="${{LATEST_TAG#v}}"
-VERSION="${{VERSION#R}}"
-ok "Latest tag: $LATEST_TAG  →  version: $VERSION"
-
-# ── Clone ──────────────────────────────────────────────────────────────
-step "Cloning VIVTC $LATEST_TAG..."
+# ── Clone master ────────────────────────────────────────────────────────
+# R1 is the only tag but predates the meson build system; use master.
+step "Cloning VIVTC master..."
 rm -rf vivtc
-git clone --depth 1 --branch "$LATEST_TAG" "$REPO_URL" vivtc
+git clone --depth 50 "$REPO_URL" vivtc
 cd vivtc
+
+VERSION=$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^[rR]//' || echo "0")
+ok "Version: $VERSION"
 
 # ── Build ──────────────────────────────────────────────────────────────
 step "Configuring with meson..."

@@ -1,12 +1,14 @@
 """
-vapoursynth-bwdif — Bob Weaver Deinterlacing Filter for VapourSynth.
+vapoursynth-znedi3 — Neural Network Edge Directed Interpolation 3 for VapourSynth.
 
-Motion-adaptive deinterlacing ported from FFmpeg's libavfilter.
-Provides core.bwdif.BwDif().
+High-quality edge-directed field interpolation for deinterlacing and upscaling.
+Provides core.znedi3.znedi3(). Includes bundled nnedi3_weights.bin.
+
+Uses git submodules (graphengine + vsxx). SIMD via C++ intrinsics (no nasm).
 
 Requires VapourSynth to be installed first.
 
-Source: https://github.com/HomeOfVapourSynthEvolution/VapourSynth-Bwdif
+Source: https://github.com/sekrit-twc/znedi3
 """
 
 from __future__ import annotations
@@ -18,26 +20,24 @@ from pathlib import Path
 from core.package_base import PackageBase
 
 
-class VapourSynthBwdif(PackageBase):
-    name = "vapoursynth-bwdif"
-    display_name = "vapoursynth-bwdif"
+class VapourSynthZnedi3(PackageBase):
+    name = "vapoursynth-znedi3"
+    display_name = "vapoursynth-znedi3"
     version = "latest"
     version_type = "git_latest"
-    source_url = "https://github.com/HomeOfVapourSynthEvolution/VapourSynth-Bwdif.git"
-    homepage = "https://github.com/HomeOfVapourSynthEvolution/VapourSynth-Bwdif"
-    description = "Bob Weaver Deinterlacing Filter for VapourSynth, ported from FFmpeg"
+    source_url = "https://github.com/sekrit-twc/znedi3.git"
+    homepage = "https://github.com/sekrit-twc/znedi3"
+    description = "Neural Network Edge Directed Interpolation 3 (nnedi3) VapourSynth plugin"
 
     apt_build_deps = [
         "git",
-        "meson",
-        "ninja-build",
-        "gcc",
-        "nasm",
+        "g++",
+        "make",
         "pkg-config",
     ]
 
     def get_effective_version(self) -> str:
-        """Tags use lowercase r-prefix: r1, r2, r3, r4, r4.1, etc."""
+        """Tags use lowercase r-prefix: r1, r2, r2.1, etc."""
         try:
             result = subprocess.run(
                 ["git", "ls-remote", "--tags", self.source_url],
@@ -55,7 +55,7 @@ class VapourSynthBwdif(PackageBase):
                 def _key(t: str) -> tuple:
                     return tuple(int(n) for n in re.findall(r"\d+", t))
                 r_tags.sort(key=_key)
-                return r_tags[-1].lstrip("rR")  # e.g. "r4.1" → "4.1"
+                return r_tags[-1].lstrip("rR")  # e.g. "r2.1" → "2.1"
         except Exception:
             pass
         return "latest"
@@ -71,39 +71,47 @@ REPO_URL="{self.source_url}"
 cd "$BUILD_DIR"
 
 # ── Find latest r-series tag ────────────────────────────────────────────
-# Tags use lowercase r-prefix: r1, r2, r3, r4, r4.1 ...
-step "Finding latest bwdif release tag..."
+# Tags use lowercase r-prefix with dotted versions: r1, r2, r2.1 ...
+step "Finding latest znedi3 release tag..."
 
 LATEST_TAG=$(git ls-remote --tags "$REPO_URL" \\
+    | grep -v '\\^' \\
     | sed 's|.*refs/tags/||' \\
     | grep -iE '^r[0-9]' \\
     | sort -V \\
     | tail -1)
 
 if [ -z "$LATEST_TAG" ]; then
-    die "Could not determine latest bwdif release tag"
+    die "Could not determine latest znedi3 release tag"
 fi
 
 VERSION=$(echo "$LATEST_TAG" | sed 's/^[rR]//')
 ok "Latest tag: $LATEST_TAG  →  version: $VERSION"
 
-# ── Clone ──────────────────────────────────────────────────────────────
-step "Cloning VapourSynth-Bwdif $LATEST_TAG..."
-rm -rf VapourSynth-Bwdif
-git clone --depth 1 --branch "$LATEST_TAG" "$REPO_URL" VapourSynth-Bwdif
-cd VapourSynth-Bwdif
+# ── Clone with submodules ──────────────────────────────────────────────
+# znedi3 requires two git submodules: graphengine and vsxx (VS C++ wrapper).
+# Without them the build fails immediately.
+step "Cloning znedi3 $LATEST_TAG (with submodules)..."
+rm -rf znedi3
+git clone --depth 1 --branch "$LATEST_TAG" "$REPO_URL" znedi3
+cd znedi3
+git submodule update --init --recursive
 
 # ── Build ──────────────────────────────────────────────────────────────
-step "Configuring with meson..."
-meson setup build --prefix=/usr --buildtype=release
+# No install target — produces vsznedi3.so in the repo root.
+# X86=1 enables SSE/AVX/AVX2 SIMD paths via C++ intrinsics (no nasm needed).
+step "Building znedi3..."
+make -j$(nproc) X86=1
 
-step "Building..."
-ninja -C build
-
-# ── Stage into DESTDIR ─────────────────────────────────────────────────
-step "Staging install (DESTDIR)..."
+# ── Stage manually ─────────────────────────────────────────────────────
+# Both vsznedi3.so and nnedi3_weights.bin must be in the same VS plugin dir.
+step "Staging install..."
 STAGING=$(mktemp -d)
-DESTDIR="$STAGING" ninja -C build install
+VSDIR="$STAGING/usr/lib/x86_64-linux-gnu/vapoursynth"
+mkdir -p "$VSDIR"
+cp vsznedi3.so "$VSDIR/"
+cp nnedi3_weights.bin "$VSDIR/"
+ok "Staged: vsznedi3.so + nnedi3_weights.bin → $VSDIR/"
 
 # ── Write DEBIAN/control ───────────────────────────────────────────────
 step "Writing package metadata..."
