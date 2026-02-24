@@ -1,0 +1,11 @@
+[project]
+name = "app-package-builder"
+version = "0.1.0"
+description = "GUI tool for building .deb packages from source for packages not in Debian repos"
+requires-python = ">=3.11"
+dependencies = [
+    "PySide6",
+]
+
+[project.scripts]
+apb = "main:main"

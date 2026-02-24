@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+build/
+
+# Built debs (don't commit, these are local artifacts)
+output/*.deb
+
+# Cached downloads (don't commit, can be large)
+cached_downloads/*
+!cached_downloads/.gitkeep
+
+# Editor
+.idea/
+.vscode/
+*.swp
