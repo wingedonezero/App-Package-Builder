@@ -22,8 +22,8 @@ from core.package_base import PackageBase
 class VapourSynthFfms2(PackageBase):
     name = "vapoursynth-ffms2"
     display_name = "vapoursynth-ffms2"
-    version = "latest"
-    version_type = "git_latest"
+    version = "master"
+    version_type = "git_tag"
     source_url = "https://github.com/FFMS/ffms2.git"
     homepage = "https://github.com/FFMS/ffms2"
     description = "FFmpegSource2 library rebuilt with VapourSynth plugin support"
@@ -52,37 +52,24 @@ REPO_URL="{self.source_url}"
 
 cd "$BUILD_DIR"
 
-# ── Find latest tag ────────────────────────────────────────────────────
-step "Finding latest ffms2 release tag..."
-
-LATEST_TAG=$(git ls-remote --tags "$REPO_URL" \\
-    | grep -v '\\^{{}}' \\
-    | sed 's|.*refs/tags/||' \\
-    | grep -E '^v?[0-9]' \\
-    | awk '{{tag=$0; norm=tag; sub(/^v/,"",norm); print norm"\\t"tag}}' \\
-    | sort -V -k1,1 \\
-    | tail -1 \\
-    | cut -f2)
-
-if [ -z "$LATEST_TAG" ]; then
-    die "Could not determine latest ffms2 release tag"
-fi
-
-VERSION="${{LATEST_TAG#v}}"
-ok "Latest tag: $LATEST_TAG  →  version: $VERSION"
-
-# ── Clone ──────────────────────────────────────────────────────────────
-step "Cloning ffms2 $LATEST_TAG..."
+# ── Clone master ───────────────────────────────────────────────────────
+step "Cloning ffms2 master..."
 rm -rf ffms2
-git clone --depth 1 --branch "$LATEST_TAG" "$REPO_URL" ffms2
+git clone --depth 50 "$REPO_URL" ffms2
 cd ffms2
+
+# Use git describe for a meaningful version (e.g. 2.40.0 or 2.40.0-5-gabcdef)
+VERSION=$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "master")
+ok "Version: $VERSION"
 
 # ── Build with autotools ───────────────────────────────────────────────
 # Note: VapourSynth plugin code lives in src/vapoursynth/ and is compiled
 # directly into libffms2.so — no separate configure flag needed, the VS
 # headers are bundled in the repo.
-step "Running autogen.sh..."
-./autogen.sh
+# Use autoreconf directly rather than autogen.sh — autogen.sh also calls
+# configure internally which would mean running configure twice.
+step "Generating build system (autoreconf)..."
+autoreconf -if
 
 step "Configuring..."
 ./configure --prefix=/usr --disable-static
