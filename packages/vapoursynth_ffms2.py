@@ -58,6 +58,7 @@ step "Finding latest ffms2 release tag..."
 LATEST_TAG=$(git ls-remote --tags "$REPO_URL" \\
     | grep -v '\\^{{}}' \\
     | sed 's|.*refs/tags/||' \\
+    | grep -E '^v?[0-9]' \\
     | awk '{{tag=$0; norm=tag; sub(/^v/,"",norm); print norm"\\t"tag}}' \\
     | sort -V -k1,1 \\
     | tail -1 \\
