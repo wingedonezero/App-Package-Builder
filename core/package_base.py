@@ -173,14 +173,25 @@ NC='\\033[0m'
 step() { echo -e "\\n${CYAN}==>${NC} $1"; }
 ok()   { echo -e "${GREEN}✓${NC} $1"; }
 die()  { echo -e "${RED}✗ $1${NC}" >&2; exit 1; }
+
+# Always keep the window open — show success or failure message on exit
+_APB_STATUS=failed
+_apb_finish() {
+    echo ""
+    echo "========================================="
+    if [ "$_APB_STATUS" = "ok" ]; then
+        echo -e "${GREEN}All done!${NC} Press Enter to close..."
+    else
+        echo -e "${RED}Build FAILED${NC} — see error above. Press Enter to close..."
+    fi
+    echo "========================================="
+    read
+}
+trap _apb_finish EXIT
 """
 
     def _script_footer(self) -> str:
-        """Standard script footer — keeps the Konsole window open."""
+        """Mark build as successful — the EXIT trap shows the final message."""
         return """
-echo ""
-echo "========================================="
-echo -e "${GREEN}All done!${NC} Press Enter to close..."
-echo "========================================="
-read
+_APB_STATUS=ok
 """
