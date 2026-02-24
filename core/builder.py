@@ -12,11 +12,14 @@ from pathlib import Path
 
 from core.package_base import PackageBase
 
-# Where builds happen (outside the repo, in home dir)
-BUILDS_BASE = Path.home() / "builds" / "apb"
+# Project root (two levels up from this file: core/ → project root)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+# Where builds happen — git clones + build artifacts, inside the repo but gitignored
+BUILDS_BASE = PROJECT_ROOT / "builds"
 
 # Where finished .deb files land (inside the repo)
-OUTPUT_DIR = Path(__file__).parent.parent / "output"
+OUTPUT_DIR = PROJECT_ROOT / "output"
 
 
 def launch_build(package: PackageBase) -> subprocess.Popen:

@@ -13,6 +13,10 @@ output/*.deb
 cached_downloads/*
 !cached_downloads/.gitkeep
 
+# Build workspace — git clones and build artifacts (don't commit, local only)
+builds/*
+!builds/.gitkeep
+
 # Git worktrees (local only, never committed)
 .worktrees/
 
