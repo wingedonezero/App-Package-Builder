@@ -59,6 +59,7 @@ LATEST_TAG=$(git ls-remote --tags "$REPO_URL" \\
     | grep -v '\\^{{}}' \\
     | sed 's|.*refs/tags/||' \\
     | grep -E '^v?[0-9]' \\
+    | grep -viE '(rc|alpha|beta|pre)' \\
     | awk '{{tag=$0; norm=tag; sub(/^v/,"",norm); print norm"\\t"tag}}' \\
     | sort -V -k1,1 \\
     | tail -1 \\
@@ -81,8 +82,10 @@ cd ffms2
 # Note: VapourSynth plugin code lives in src/vapoursynth/ and is compiled
 # directly into libffms2.so — no separate configure flag needed, the VS
 # headers are bundled in the repo.
-step "Running autogen.sh..."
-./autogen.sh
+# Use autoreconf directly rather than autogen.sh — autogen.sh also calls
+# configure internally which would mean running configure twice.
+step "Generating build system (autoreconf)..."
+autoreconf -if
 
 step "Configuring..."
 ./configure --prefix=/usr --disable-static
