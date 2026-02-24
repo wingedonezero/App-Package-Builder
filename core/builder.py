@@ -39,7 +39,6 @@ def launch_build(package: PackageBase) -> subprocess.Popen:
     # "Press Enter to close..." footer baked into every build script
     konsole_cmd = [
         "konsole",
-        "--noclose",
         "-e",
         "bash",
         str(script_path),
@@ -82,7 +81,6 @@ read
 
     konsole_cmd = [
         "konsole",
-        "--noclose",
         "-e",
         "bash",
         tmp.name,
