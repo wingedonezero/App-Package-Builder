@@ -23,11 +23,9 @@ class LibDvdCss(PackageBase):
 
     apt_build_deps = [
         "git",
-        "autoconf",
-        "automake",
-        "libtool",
+        "meson",
+        "ninja-build",
         "gcc",
-        "make",
         "checkinstall",
         "pkg-config",
     ]
@@ -78,19 +76,17 @@ git clone --depth 1 --branch "$LATEST_TAG" "$REPO_URL" libdvdcss
 cd libdvdcss
 
 # ── Build ──────────────────────────────────────────────────────────────
-step "Running autoreconf..."
-autoreconf -fi
-
-step "Configuring..."
-./configure --prefix=/usr
+step "Configuring with meson..."
+meson setup build --prefix=/usr --buildtype=release
 
 step "Building..."
-make -j"$(nproc)"
+ninja -C build
 
 # ── Package ────────────────────────────────────────────────────────────
 step "Creating .deb with checkinstall..."
 
 # checkinstall --install=no: build the .deb, don't install it
+cd build
 sudo checkinstall \\
     --install=no \\
     --pkgname="{self.name}" \\
@@ -99,14 +95,14 @@ sudo checkinstall \\
     --pkglicense="LGPL-2.1" \\
     --pkggroup="libs" \\
     --pkgsource="{self.source_url}" \\
-    --pakdir="$BUILD_DIR/libdvdcss" \\
+    --pakdir="$BUILD_DIR/libdvdcss/build" \\
     --nodoc \\
     --default \\
-    make install
+    ninja install
 
 # ── Move .deb to output dir ────────────────────────────────────────────
 step "Moving .deb to output directory..."
-DEB=$(find "$BUILD_DIR/libdvdcss" -maxdepth 1 -name "*.deb" | head -1)
+DEB=$(find "$BUILD_DIR/libdvdcss/build" -maxdepth 1 -name "*.deb" | head -1)
 
 if [ -z "$DEB" ]; then
     die "No .deb file found after checkinstall!"
