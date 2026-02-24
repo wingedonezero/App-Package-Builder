@@ -63,7 +63,7 @@ full_setup() {
     for py in python3.13 python3 python; do
         if command -v "$py" &> /dev/null; then
             version=$("$py" --version 2>&1 | grep -oP '\d+\.\d+\.\d+')
-            if [[ "$version" == 3.13.* ]]; then
+            if echo "$version" | grep -q "^3\.13\."; then
                 PYTHON_CMD="$py"
                 echo -e "${GREEN}✓ Found Python $version: $PYTHON_CMD${NC}"
                 break
