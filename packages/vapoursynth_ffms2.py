@@ -69,6 +69,7 @@ ok "Version: $VERSION"
 # Use autoreconf directly rather than autogen.sh — autogen.sh also calls
 # configure internally which would mean running configure twice.
 step "Generating build system (autoreconf)..."
+mkdir -p src/config
 autoreconf -if
 
 step "Configuring..."
