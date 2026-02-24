@@ -73,7 +73,7 @@ mkdir -p src/config
 autoreconf -if
 
 step "Configuring..."
-./configure --prefix=/usr --disable-static
+./configure --prefix=/usr --libdir=/usr/lib/x86_64-linux-gnu --disable-static
 
 step "Building..."
 make -j$(nproc)
@@ -124,7 +124,7 @@ CTRL
 # ── Build .deb ─────────────────────────────────────────────────────────
 step "Building .deb with dpkg-deb..."
 DEB_FILE="$OUTPUT_DIR/{self.name}_${{VERSION}}_${{ARCH}}.deb"
-dpkg-deb --build "$STAGING" "$DEB_FILE"
+dpkg-deb --root-owner-group --build "$STAGING" "$DEB_FILE"
 rm -rf "$STAGING"
 ok "Built: $DEB_FILE"
 
