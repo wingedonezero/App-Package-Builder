@@ -11,6 +11,7 @@ Source: https://github.com/HomeOfVapourSynthEvolution/VapourSynth-Bwdif
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -36,7 +37,7 @@ class VapourSynthBwdif(PackageBase):
     ]
 
     def get_effective_version(self) -> str:
-        """HomeOfVapourSynthEvolution repos use R-prefix tags: R6, R7, etc."""
+        """Tags use lowercase r-prefix: r1, r2, r3, r4, r4.1, etc."""
         try:
             result = subprocess.run(
                 ["git", "ls-remote", "--tags", self.source_url],
@@ -48,11 +49,13 @@ class VapourSynthBwdif(PackageBase):
             for line in result.stdout.splitlines():
                 if "refs/tags/" in line and "^{}" not in line:
                     tag = line.split("refs/tags/")[-1].strip()
-                    if tag.startswith("R") and tag[1:].isdigit():
+                    if len(tag) > 1 and tag[0].lower() == "r" and tag[1].isdigit():
                         r_tags.append(tag)
             if r_tags:
-                r_tags.sort(key=lambda t: int(t[1:]))
-                return r_tags[-1]
+                def _key(t: str) -> tuple:
+                    return tuple(int(n) for n in re.findall(r"\d+", t))
+                r_tags.sort(key=_key)
+                return r_tags[-1].lstrip("rR")  # e.g. "r4.1" → "4.1"
         except Exception:
             pass
         return "latest"
@@ -67,24 +70,21 @@ REPO_URL="{self.source_url}"
 
 cd "$BUILD_DIR"
 
-# ── Find latest R-series tag ────────────────────────────────────────────
-# HomeOfVapourSynthEvolution repos use R-prefixed tags: R6, R7, R8 ...
+# ── Find latest r-series tag ────────────────────────────────────────────
+# Tags use lowercase r-prefix: r1, r2, r3, r4, r4.1 ...
 step "Finding latest bwdif release tag..."
 
 LATEST_TAG=$(git ls-remote --tags "$REPO_URL" \\
-    | grep -v '\\^{{}}' \\
     | sed 's|.*refs/tags/||' \\
-    | grep '^R[0-9]\\+$' \\
-    | sed 's/^R//' \\
-    | sort -n \\
-    | tail -1 \\
-    | sed 's/^/R/')
+    | grep -iE '^r[0-9]' \\
+    | sort -V \\
+    | tail -1)
 
 if [ -z "$LATEST_TAG" ]; then
     die "Could not determine latest bwdif release tag"
 fi
 
-VERSION="${{LATEST_TAG#R}}"
+VERSION=$(echo "$LATEST_TAG" | sed 's/^[rR]//')
 ok "Latest tag: $LATEST_TAG  →  version: $VERSION"
 
 # ── Clone ──────────────────────────────────────────────────────────────
