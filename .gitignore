@@ -13,6 +13,9 @@ output/*.deb
 cached_downloads/*
 !cached_downloads/.gitkeep
 
+# Git worktrees (local only, never committed)
+.worktrees/
+
 # Editor
 .idea/
 .vscode/
