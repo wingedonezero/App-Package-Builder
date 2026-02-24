@@ -83,6 +83,9 @@ class PackageBase(ABC):
         """
         Return the version string to display in the UI.
         For git_latest this queries the remote for the latest tag.
+
+        Uses normalised version sorting so mixed naming conventions
+        (e.g. v1_2_8 vs 1.5.0 in the same repo) resolve correctly.
         """
         if self.version != "latest":
             return self.version
@@ -90,16 +93,41 @@ class PackageBase(ABC):
         if self.version_type in ("git_latest", "git_tag"):
             try:
                 result = subprocess.run(
-                    ["git", "ls-remote", "--tags", "--sort=-v:refname", self.source_url],
+                    ["git", "ls-remote", "--tags", self.source_url],
                     capture_output=True,
                     text=True,
                     timeout=10,
                 )
-                # First line: "<hash>\trefs/tags/<tag>"
+                # Collect all tags, skip dereference lines (^{})
+                tags = []
                 for line in result.stdout.splitlines():
                     if "refs/tags/" in line and "^{}" not in line:
                         tag = line.split("refs/tags/")[-1].strip()
-                        return tag
+                        tags.append(tag)
+
+                if not tags:
+                    return "latest"
+
+                # Normalise each tag to a dotted version for sorting,
+                # keeping the original tag alongside so we can return it.
+                def normalise(tag: str) -> str:
+                    t = tag.lstrip("v")
+                    t = t.replace("_", ".")
+                    return t
+
+                def version_key(tag: str) -> tuple:
+                    """Convert a tag to a sortable int tuple, e.g. '1.5.0' → (1, 5, 0)."""
+                    try:
+                        return tuple(int(x) for x in normalise(tag).split("."))
+                    except ValueError:
+                        return (0,)
+
+                versioned = [t for t in tags if version_key(t) != (0,)]
+                if versioned:
+                    versioned.sort(key=version_key)
+                    latest_tag = versioned[-1]
+                    return normalise(latest_tag)
+
             except Exception:
                 pass
         return "latest"
