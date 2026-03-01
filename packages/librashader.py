@@ -1,8 +1,12 @@
 """
 librashader — RetroArch shader runtime library.
 
-Provides the librashader shared library, static library, headers, and
-pkg-config file.  Used by ares and other emulators for GPU shader support.
+Provides the librashader shared library, static library, and pkg-config file.
+Used by ares and other emulators for GPU shader support.
+
+Note: headers are NOT installed because librashader.h contains type definitions
+for all platforms (Vulkan, D3D, Metal) that cause build failures on Linux.
+Applications like ares bundle their own librashader_ld.h for runtime loading.
 
 Source: https://github.com/SnowflakePowered/librashader
 """
@@ -116,10 +120,9 @@ step "Staging install..."
 STAGING=$(mktemp -d)
 ARCH=$(dpkg --print-architecture)
 LIBDIR="$STAGING/usr/lib"
-INCDIR="$STAGING/usr/include/librashader"
 PCDIR="$STAGING/usr/lib/pkgconfig"
 
-mkdir -p "$LIBDIR" "$INCDIR" "$PCDIR"
+mkdir -p "$LIBDIR" "$PCDIR"
 
 # Shared library + SONAME symlinks
 cp target/optimized/librashader.so "$LIBDIR/librashader.so.$VERSION"
@@ -128,30 +131,22 @@ ln -sf "librashader.so.2" "$LIBDIR/librashader.so"
 
 # Static library
 cp target/optimized/librashader.a "$LIBDIR/librashader.a"
+ok "Installed libraries to $LIBDIR"
 
-# Headers — prefer freshly generated header, fall back to bundled copy
-if [ -f target/optimized/librashader.h ]; then
-    cp target/optimized/librashader.h "$INCDIR/"
-elif [ -f include/librashader.h ]; then
-    cp include/librashader.h "$INCDIR/"
-else
-    die "Cannot find librashader.h"
-fi
-cp include/librashader_ld.h "$INCDIR/"
-ok "Installed headers to $INCDIR"
+# Note: headers are NOT installed — librashader.h contains cross-platform
+# types (Vulkan, D3D, Metal) that fail to compile on Linux.  Applications
+# like ares bundle their own librashader_ld.h for runtime dlopen() loading.
 
-# pkg-config file
+# pkg-config file (library discovery only, no Cflags)
 cat > "$PCDIR/librashader.pc" <<PCEOF
 prefix=/usr
 exec_prefix=\\${{prefix}}
 libdir=\\${{exec_prefix}}/lib
-includedir=\\${{prefix}}/include/librashader
 
 Name: librashader
 Description: RetroArch shaders for all
 Version: $VERSION
 Libs: -L\\${{libdir}} -lrashader
-Cflags: -I\\${{includedir}}
 PCEOF
 ok "Installed pkg-config file"
 
@@ -172,7 +167,7 @@ Section: libs
 Priority: optional
 Homepage: {self.homepage}
 Description: {self.description}
- Includes shared library, static library, headers, and pkg-config file.
+ Includes shared library, static library, and pkg-config file.
 CTRL
 
 # ── Build .deb ────────────────────────────────────────────────────────
