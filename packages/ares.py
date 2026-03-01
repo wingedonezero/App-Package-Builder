@@ -36,6 +36,7 @@ class Ares(PackageBase):
         "libudev-dev",
         "libopenal-dev",
         "libao-dev",
+        "libsdl3-dev",
     ]
 
     def write_build_script(self, build_dir: Path, output_dir: Path) -> Path:
