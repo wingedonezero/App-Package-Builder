@@ -26,8 +26,6 @@ class Librashader(PackageBase):
 
     apt_build_deps = [
         "git",
-        "rustc",
-        "cargo",
         "gcc",
         "g++",
         "patchelf",
