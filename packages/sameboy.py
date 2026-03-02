@@ -1,5 +1,5 @@
 """
-SameBoy — Game Boy and Game Boy Color emulator.
+SameBoy — Game Boy and Game Boy Color emulator (release).
 
 Accurate Game Boy, Game Boy Color, and Super Game Boy emulator with
 an SDL2 frontend for Linux. Includes compiled boot ROMs and shaders.
@@ -18,6 +18,119 @@ from pathlib import Path
 from core.package_base import PackageBase
 
 
+# Shared build logic used by both release and master packages.
+SAMEBOY_BUILD_DEPS = [
+    "git",
+    "build-essential",
+    "pkg-config",
+    "bison",
+    "libsdl2-dev",
+    "libpng-dev",
+    "libgl-dev",
+    "libgdk-pixbuf-2.0-dev",
+    "libglib2.0-dev",
+]
+
+
+def _sameboy_build_and_stage() -> str:
+    """Return the shared shell snippet that builds rgbds, cppp, SameBoy,
+    and stages files into $STAGING.  Caller must set STAGING beforehand."""
+    return r"""
+# ── Build rgbds (boot ROM assembler) ─────────────────────────────────
+# rgbds is not packaged in Debian, must be built from source.
+# Only used at build time to compile boot ROMs from assembly.
+step "Building rgbds (Game Boy assembler)..."
+rm -rf rgbds
+git clone --depth 1 --branch v0.9.4 https://github.com/gbdev/rgbds.git rgbds
+cd rgbds
+make -j$(nproc)
+export PATH="$(pwd):$PATH"
+cd "$BUILD_DIR"
+ok "rgbds built: $(rgbasm --version)"
+
+# ── Build cppp (C preprocessor tool) ─────────────────────────────────
+step "Building cppp..."
+rm -rf cppp
+git clone --depth 1 https://github.com/BR903/cppp.git cppp
+cd cppp
+make -j$(nproc)
+export PATH="$(pwd):$PATH"
+cd "$BUILD_DIR"
+ok "cppp built"
+
+cd SameBoy
+
+# ── Build SDL frontend ───────────────────────────────────────────────
+step "Building SameBoy SDL frontend..."
+make -j$(nproc) sdl CONF=release
+
+# ── Stage manually ───────────────────────────────────────────────────
+# We stage files ourselves instead of 'make install' because the install
+# target tries to build the XDG thumbnailer, which fails due to LTO
+# object incompatibility with the SDL build.
+step "Staging install..."
+BINDIR="$STAGING/usr/bin"
+DATADIR="$STAGING/usr/share/sameboy"
+APPDIR="$STAGING/usr/share/applications"
+MIMEDIR="$STAGING/usr/share/mime/packages"
+
+mkdir -p "$BINDIR" "$DATADIR" "$APPDIR"
+
+# Main binary
+install -m 755 build/bin/SDL/sameboy "$BINDIR/"
+
+# Data files (shaders, palettes, boot ROMs, etc.)
+for item in Shaders Palettes BootROMs LICENSE registers.sym background.bmp; do
+    if [ -e "build/bin/SDL/$item" ]; then
+        cp -r "build/bin/SDL/$item" "$DATADIR/"
+    fi
+done
+ok "Installed binary and data files"
+
+# ── Desktop integration ──────────────────────────────────────────────
+# Desktop file
+if [ -f FreeDesktop/sameboy.desktop ]; then
+    cp FreeDesktop/sameboy.desktop "$APPDIR/"
+    ok "Installed desktop file"
+fi
+
+# MIME types
+if [ -f FreeDesktop/sameboy.xml ]; then
+    mkdir -p "$MIMEDIR"
+    cp FreeDesktop/sameboy.xml "$MIMEDIR/"
+    ok "Installed MIME types"
+fi
+
+# Icons (app + cartridge icons at all available sizes)
+for size in 16 32 64 128 256 512; do
+    ICON_DST="$STAGING/usr/share/icons/hicolor/${size}x${size}"
+
+    # App icon
+    for src in "FreeDesktop/AppIcon/${size}x${size}.png" \
+               "FreeDesktop/${size}x${size}/apps/sameboy.png"; do
+        if [ -f "$src" ]; then
+            mkdir -p "$ICON_DST/apps"
+            cp "$src" "$ICON_DST/apps/sameboy.png"
+            break
+        fi
+    done
+
+    # Cartridge MIME icons
+    for type in x-gameboy-rom x-gameboy-color-rom; do
+        for src in "FreeDesktop/${size}x${size}/mimetypes/${type}.png"; do
+            if [ -f "$src" ]; then
+                mkdir -p "$ICON_DST/mimetypes"
+                cp "$src" "$ICON_DST/mimetypes/${type}.png"
+            fi
+        done
+    done
+done
+ok "Installed icons"
+
+cd "$BUILD_DIR"
+"""
+
+
 class SameBoy(PackageBase):
     name = "sameboy"
     display_name = "SameBoy"
@@ -27,17 +140,7 @@ class SameBoy(PackageBase):
     homepage = "https://sameboy.github.io"
     description = "Accurate Game Boy, Game Boy Color, and Super Game Boy emulator"
 
-    apt_build_deps = [
-        "git",
-        "build-essential",
-        "pkg-config",
-        "bison",
-        "libsdl2-dev",
-        "libpng-dev",
-        "libgl-dev",
-        "libgdk-pixbuf-2.0-dev",
-        "libglib2.0-dev",
-    ]
+    apt_build_deps = list(SAMEBOY_BUILD_DEPS)
 
     def get_effective_version(self) -> str:
         """SameBoy uses vX.Y.Z tags (sometimes vX.Y without patch)."""
@@ -100,44 +203,13 @@ VERSION="$LATEST_VER"
 GIT_TAG="v$VERSION"
 ok "Latest tag: $GIT_TAG  →  version: $VERSION"
 
-# ── Build rgbds (boot ROM assembler) ─────────────────────────────────
-# rgbds is not packaged in Debian, must be built from source.
-# Only used at build time to compile boot ROMs from assembly.
-step "Building rgbds (Game Boy assembler)..."
-rm -rf rgbds
-git clone --depth 1 --branch v0.9.4 https://github.com/gbdev/rgbds.git rgbds
-cd rgbds
-make -j$(nproc)
-RGBDS_DIR="$(pwd)"
-export PATH="$RGBDS_DIR:$PATH"
-cd "$BUILD_DIR"
-ok "rgbds built: $(rgbasm --version)"
-
-# ── Build cppp (C preprocessor tool) ─────────────────────────────────
-step "Building cppp..."
-rm -rf cppp
-git clone --depth 1 https://github.com/BR903/cppp.git cppp
-cd cppp
-make -j$(nproc)
-export PATH="$(pwd):$PATH"
-cd "$BUILD_DIR"
-ok "cppp built"
-
-# ── Clone SameBoy ────────────────────────────────────────────────────
+# ── Clone at that tag ────────────────────────────────────────────────
 step "Cloning SameBoy $GIT_TAG..."
 rm -rf SameBoy
 git clone --depth 1 --branch "$GIT_TAG" "$REPO_URL" SameBoy
-cd SameBoy
 
-# ── Build SDL frontend ───────────────────────────────────────────────
-step "Building SameBoy SDL frontend..."
-make -j$(nproc) sdl CONF=native_release
-
-# ── Stage into DESTDIR ────────────────────────────────────────────────
-step "Staging install..."
 STAGING=$(mktemp -d)
-make install DESTDIR="$STAGING" PREFIX=/usr FREEDESKTOP=true
-
+""" + _sameboy_build_and_stage() + f"""
 # ── Write DEBIAN/control ─────────────────────────────────────────────
 step "Writing package metadata..."
 ARCH=$(dpkg --print-architecture)
