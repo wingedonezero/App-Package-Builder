@@ -60,72 +60,15 @@ ok "cppp built"
 
 cd SameBoy
 
-# ── Build SDL frontend ───────────────────────────────────────────────
-step "Building SameBoy SDL frontend..."
-make -j$(nproc) sdl CONF=release
+# ── Build SDL frontend + thumbnailer together ─────────────────────────
+# Building both targets in one make invocation ensures consistent
+# compiler and LTO settings across all object files.
+step "Building SameBoy (SDL frontend + thumbnailer)..."
+make -j$(nproc) sdl xdg-thumbnailer CONF=release FREEDESKTOP=true
 
-# ── Stage manually ───────────────────────────────────────────────────
-# We stage files ourselves instead of 'make install' because the install
-# target tries to build the XDG thumbnailer, which fails due to LTO
-# object incompatibility with the SDL build.
+# ── Stage via make install ────────────────────────────────────────────
 step "Staging install..."
-BINDIR="$STAGING/usr/bin"
-DATADIR="$STAGING/usr/share/sameboy"
-APPDIR="$STAGING/usr/share/applications"
-MIMEDIR="$STAGING/usr/share/mime/packages"
-
-mkdir -p "$BINDIR" "$DATADIR" "$APPDIR"
-
-# Main binary
-install -m 755 build/bin/SDL/sameboy "$BINDIR/"
-
-# Data files (shaders, palettes, boot ROMs, etc.)
-for item in Shaders Palettes BootROMs LICENSE registers.sym background.bmp; do
-    if [ -e "build/bin/SDL/$item" ]; then
-        cp -r "build/bin/SDL/$item" "$DATADIR/"
-    fi
-done
-ok "Installed binary and data files"
-
-# ── Desktop integration ──────────────────────────────────────────────
-# Desktop file
-if [ -f FreeDesktop/sameboy.desktop ]; then
-    cp FreeDesktop/sameboy.desktop "$APPDIR/"
-    ok "Installed desktop file"
-fi
-
-# MIME types
-if [ -f FreeDesktop/sameboy.xml ]; then
-    mkdir -p "$MIMEDIR"
-    cp FreeDesktop/sameboy.xml "$MIMEDIR/"
-    ok "Installed MIME types"
-fi
-
-# Icons (app + cartridge icons at all available sizes)
-for size in 16 32 64 128 256 512; do
-    ICON_DST="$STAGING/usr/share/icons/hicolor/${size}x${size}"
-
-    # App icon
-    for src in "FreeDesktop/AppIcon/${size}x${size}.png" \
-               "FreeDesktop/${size}x${size}/apps/sameboy.png"; do
-        if [ -f "$src" ]; then
-            mkdir -p "$ICON_DST/apps"
-            cp "$src" "$ICON_DST/apps/sameboy.png"
-            break
-        fi
-    done
-
-    # Cartridge MIME icons
-    for type in x-gameboy-rom x-gameboy-color-rom; do
-        for src in "FreeDesktop/${size}x${size}/mimetypes/${type}.png"; do
-            if [ -f "$src" ]; then
-                mkdir -p "$ICON_DST/mimetypes"
-                cp "$src" "$ICON_DST/mimetypes/${type}.png"
-            fi
-        done
-    done
-done
-ok "Installed icons"
+make install DESTDIR="$STAGING" PREFIX=/usr FREEDESKTOP=true
 
 cd "$BUILD_DIR"
 """
