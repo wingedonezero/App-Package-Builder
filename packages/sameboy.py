@@ -64,11 +64,11 @@ cd SameBoy
 # Building both targets in one make invocation ensures consistent
 # compiler and LTO settings across all object files.
 step "Building SameBoy (SDL frontend + thumbnailer)..."
-make -j$(nproc) sdl xdg-thumbnailer CONF=release FREEDESKTOP=true
+make -j$(nproc) sdl xdg-thumbnailer CONF=release FREEDESKTOP=true DATA_DIR=/usr/share/sameboy/
 
 # ── Stage via make install ────────────────────────────────────────────
 step "Staging install..."
-make install DESTDIR="$STAGING" PREFIX=/usr FREEDESKTOP=true
+make install DESTDIR="$STAGING" PREFIX=/usr CONF=release FREEDESKTOP=true DATA_DIR=/usr/share/sameboy/
 
 cd "$BUILD_DIR"
 """
